@@ -453,6 +453,34 @@ statusPop.addEventListener('click', e => {
 });
 document.addEventListener('pointerdown', e => { if (!statusPop.hidden && !statusPop.contains(e.target) && !e.target.closest('[data-status-open]')) closeStatus(); });
 
+/* ---- click blank space in a day: add drop-down ---- */
+const addPop = document.createElement('div');
+addPop.className = 'move-pop add-pop'; addPop.id = 'addPop'; addPop.hidden = true;
+document.body.appendChild(addPop);
+let addZone = null;
+const IC_TODO = '<svg class="ap-ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="15" height="15" rx="4"/><path d="M6.5 10.3l2.4 2.4 4.6-5"/></svg>';
+const IC_MTG = '<svg class="ap-ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.5V10l3 2"/></svg>';
+function openAddPop(zone, x, y) {
+  closeMove(); closeStatus();
+  const k = zone.dataset.date;
+  addZone = zone; zone.classList.add('picked');
+  addPop.innerHTML = `<div class="mp-title">Add to ${esc(fmtDay(k))}</div>
+    <button data-new="task">${IC_TODO}<span>To do</span></button>
+    <button data-new="meeting">${IC_MTG}<span>Meeting</span></button>`;
+  addPop.dataset.date = k; addPop.hidden = false;
+  const w = addPop.offsetWidth, h = addPop.offsetHeight;
+  let px = Math.max(8, Math.min(x - 14, innerWidth - w - 8));
+  let py = y + 12; if (py + h > innerHeight - 8) py = Math.max(8, y - h - 12);
+  addPop.style.left = px + 'px'; addPop.style.top = py + 'px';
+}
+function closeAdd() { addPop.hidden = true; addZone?.classList.remove('picked'); addZone = null; }
+addPop.addEventListener('click', e => {
+  const b = e.target.closest('[data-new]'); if (!b) return;
+  const k = addPop.dataset.date; closeAdd();
+  openTask(null, { date: k, kind: b.dataset.new });
+});
+document.addEventListener('pointerdown', e => { if (!addPop.hidden && !addPop.contains(e.target)) closeAdd(); });
+
 function renderCalendar() {
   viewEl.className = 'view' + (navDir > 0 ? ' slide-l' : navDir < 0 ? ' slide-r' : '');
   void viewEl.offsetWidth;
@@ -541,7 +569,10 @@ function onCalClick(e) {
   const add = e.target.closest('[data-add]');
   if (add) { openTask(null, { date: add.dataset.add }); return; }
   const c = e.target.closest('[data-id]');
-  if (c) openTask(c.dataset.id);
+  if (c) { openTask(c.dataset.id); return; }
+  // blank space in a day: drop-down to add a to-do or meeting there
+  const z = e.target.closest('[data-date]');
+  if (z && !e.target.closest('a,button,input,select,textarea,label')) openAddPop(z, e.clientX, e.clientY);
 }
 viewEl.addEventListener('click', onCalClick);
 $('#tray').addEventListener('click', onCalClick);
@@ -740,7 +771,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); $('#newTask').click(); }
   else if (e.key === 'ArrowLeft') step(-1);
   else if (e.key === 'ArrowRight') step(1);
-  else if (e.key === 'Escape') closeMove();
+  else if (e.key === 'Escape') { closeMove(); closeStatus(); closeAdd(); }
 });
 
 /* ---------------- notes ---------------- */
@@ -1036,6 +1067,7 @@ addEventListener('scroll', () => {
   lastY = y;
   if (!movePop.hidden) closeMove();
   if (!statusPop.hidden) closeStatus();
+  if (!addPop.hidden) closeAdd();
 }, { passive: true });
 
 const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }), { threshold: .15 });

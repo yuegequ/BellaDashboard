@@ -648,3 +648,12 @@ li.done .box{background:var(--blush);border-color:var(--rose)}
 .card.span{border-style:dashed;border-color:#d3ccbc}
 .card.span.due{border-style:solid}
 .card.span .c-sub span:first-child{color:var(--celadon-d);font-weight:500}
+
+/* add drop-down on blank day space */
+.add-pop{min-width:170px}
+.add-pop button{display:flex;align-items:center;gap:10px}
+.add-pop .ap-ic{width:18px;height:18px;flex:none;color:var(--celadon-d)}
+.add-pop button:hover .ap-ic{color:var(--ink)}
+.cell.picked,.wcol.picked,.day.picked{background:rgba(220,231,232,.55)!important;outline:1px dashed var(--celadon-d);outline-offset:-4px}
+.cell[data-date],.wcol[data-date],.day[data-date]{cursor:cell}
+.cell .card,.cell .mtg,.wcol .card,.wcol .mtg,.day .card,.day .mtg{cursor:pointer}
