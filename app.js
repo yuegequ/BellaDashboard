@@ -125,6 +125,8 @@ function timeRange(t) {
   return a.ap === b.ap ? `${a.n} – ${b.n} ${b.ap}` : `${a.n} ${a.ap} – ${b.n} ${b.ap}`;
 }
 const fmtDur = ms => { const m = Math.max(1, Math.ceil(ms / 60000)); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`; };
+const dayDiff = (a, b) => Math.round((parse(a) - parse(b)) / 864e5);
+const covers = (t, k) => !!t.date && (t.date === k || (!!t.endDate && t.date <= k && k <= t.endDate));
 function normalizeTasks(list, force) {
   for (const t of list) {
     if (!t.kind || (force && t.kind === 'task' && !t.start)) {
@@ -134,6 +136,7 @@ function normalizeTasks(list, force) {
     if (t.start === undefined) t.start = '';
     if (t.end === undefined) t.end = '';
     t.isDue = !!t.isDue;
+    t.endDate = (t.kind === 'meeting' || !t.date || !t.endDate || t.endDate <= t.date) ? '' : t.endDate;
   }
 }
 
@@ -215,9 +218,9 @@ function seedNotes() {
 function rollover() {
   const t = todayStr(); let n = 0;
   for (const x of S.tasks) {
-    if (ROLL_STATUSES.includes(x.status) && x.kind !== 'meeting' && x.date && x.date < t) {
+    if (ROLL_STATUSES.includes(x.status) && x.kind !== 'meeting' && x.date && x.date < t && !(x.endDate && x.endDate >= t)) {
       x.rolledFrom = x.rolledFrom || x.date;
-      x.date = t; x.rolled = (x.rolled || 0) + 1; n++;
+      x.date = t; x.endDate = ''; x.rolled = (x.rolled || 0) + 1; n++;
     }
   }
   if (n) { save(); toast(`${n} in-progress task${n > 1 ? 's' : ''} carried over to today`); }
@@ -235,8 +238,9 @@ const viewEl = $('#view');
 
 const isMtg = t => t.kind === 'meeting';
 const closedSt = s => s === 'done' || s === 'cancelled';
-const ordKey = t => closedSt(t.status) ? 20 + ST_ORDER[t.status] : (t.isDue ? -1 : ST_ORDER[t.status]);
-const todoSort = (a, b) => ordKey(a) - ordKey(b) || a.created - b.created;
+const dueOn = (t, k) => t.isDue && (!t.endDate || !k || t.endDate === k);   // red lands on the last day of a span
+const ordKey = (t, k) => closedSt(t.status) ? 20 + ST_ORDER[t.status] : (dueOn(t, k) ? -1 : ST_ORDER[t.status]);
+const todoSort = k => (a, b) => ordKey(a, k) - ordKey(b, k) || a.created - b.created;
 const mtgSort = (a, b) => (a.start || '99:99').localeCompare(b.start || '99:99') || a.created - b.created;
 
 function visible() {
@@ -246,12 +250,18 @@ function visible() {
 }
 function byDate(list = visible()) {
   const m = {};
-  for (const t of list) (m[t.date || ''] ||= []).push(t);
+  for (const t of list) {
+    (m[t.date || ''] ||= []).push(t);
+    if (t.date && t.endDate && t.endDate > t.date && t.kind !== 'meeting') {
+      let d = addDays(parse(t.date), 1); const end = parse(t.endDate);
+      for (let n = 0; d <= end && n < 120; d = addDays(d, 1), n++) (m[ymd(d)] ||= []).push(t);
+    }
+  }
   return m;
 }
 // every day = meetings pinned on top (by time) + to-do list below (red/due first)
-function split(list = []) {
-  return { m: list.filter(isMtg).sort(mtgSort), d: list.filter(t => !isMtg(t)).sort(todoSort) };
+function split(list = [], k = '') {
+  return { m: list.filter(isMtg).sort(mtgSort), d: list.filter(t => !isMtg(t)).sort(todoSort(k)) };
 }
 function cleanTitle(t) {
   const raw = t.title || 'Untitled';
@@ -263,16 +273,18 @@ function cleanTitle(t) {
 const linkBtn = t => t.link ? ` <a class="c-link" href="${esc(t.link)}" target="_blank" rel="noopener" title="${esc(host(t.link))}">↗</a>` : '';
 
 /* ---- to-do card ---- */
-function card(t, mode, i = 0) {
+function card(t, mode, i = 0, day = '') {
   const full = mode !== 'mini';
-  const dueNow = t.isDue && !closedSt(t.status);
+  const dueNow = dueOn(t, day) && !closedSt(t.status);
+  const multi = t.endDate && t.endDate > t.date;
   const sub = [];
+  if (multi) sub.push(day ? `day ${dayDiff(day, t.date) + 1} of ${dayDiff(t.endDate, t.date) + 1}` : `${fmtShort(t.date)} → ${fmtShort(t.endDate)}`);
   if (t.due) sub.push('due ' + fmtShort(t.due));
   if (t.rolled && t.status !== 'done') sub.push('↻ carried over');
   const chips = (t.cls ? `<span class="tag ${tagColor(t.cls)}">${esc(t.cls)}</span>` : '') +
     (t.type ? `<span class="type ${HOT_TYPES.includes(t.type) ? 'hot' : ''}">${esc(t.type)}</span>` : '') +
     (full ? `<button class="st-pill" data-status-open="${t.id}" title="Change status">${esc(stLabel(t.status))}</button>` : '');
-  return `<article class="card s-${t.status}${dueNow ? ' due' : ''}" draggable="${!TOUCH}" data-id="${t.id}" style="--i:${i}">
+  return `<article class="card s-${t.status}${dueNow ? ' due' : ''}${multi ? ' span' : ''}" draggable="${!TOUCH}" data-id="${t.id}" style="--i:${i}">
     <button class="dot" data-toggle="${t.id}" aria-label="${esc(stLabel(t.status))}, tap to mark done" title="${esc(stLabel(t.status))}"></button>
     <div class="c-body">
       <div class="c-title">${dueNow ? '<span class="badge-due">DUE</span> ' : ''}${esc(t.title || 'Untitled')}${linkBtn(t)}</div>
@@ -343,10 +355,10 @@ function renderMonth() {
   let h = `<div class="cal month"><div class="dow">${DOW.map(d => `<div>${d}</div>`).join('')}</div><div class="grid">`;
   for (let i = 0; i < cells; i++) {
     const d = addDays(start, i), k = ymd(d);
-    const { m: ms, d: ds } = split(map[k]);
+    const { m: ms, d: ds } = split(map[k], k);
     h += `<div class="cell ${d.getMonth() !== m ? 'out' : ''} ${k === today ? 'today' : ''}" data-date="${k}">
       <div class="cell-head"><span class="num">${d.getDate() === 1 ? MON[d.getMonth()] + ' ' : ''}${d.getDate()}</span><button class="add" data-add="${k}" aria-label="Add task on ${fmtShort(k)}">+</button></div>
-      <div class="stack">${ms.map((t, j) => mtgCard(t, 'mini', j)).join('')}${ms.length && ds.length ? '<div class="sep"></div>' : ''}${ds.map((t, j) => card(t, 'mini', j + ms.length)).join('')}</div></div>`;
+      <div class="stack">${ms.map((t, j) => mtgCard(t, 'mini', j)).join('')}${ms.length && ds.length ? '<div class="sep"></div>' : ''}${ds.map((t, j) => card(t, 'mini', j + ms.length, k)).join('')}</div></div>`;
   }
   viewEl.innerHTML = h + '</div></div>';
 }
@@ -361,14 +373,14 @@ function renderWeek() {
   let h = '<div class="week">';
   for (let i = 0; i < 7; i++) {
     const d = addDays(start, i), k = ymd(d);
-    const { m: ms, d: ds } = split(map[k]);
+    const { m: ms, d: ds } = split(map[k], k);
     const done = ds.filter(t => t.status === 'done').length;
     h += `<div class="wcol ${k === today ? 'today' : ''}" data-date="${k}">
       <div class="whead"><div><div class="d">${DOW[i]}</div><div class="n">${d.getDate()}</div></div><span class="wp">${ds.length ? `${done}/${ds.length}` : ''}</span></div>
       <div class="sec-label first">Meetings</div>
       <div class="stack">${ms.length ? ms.map((t, j) => mtgCard(t, 'week', j)).join('') : '<div class="sec-empty">none</div>'}</div>
       <div class="sec-label">To do</div>
-      <div class="stack">${ds.map((t, j) => card(t, 'week', j + ms.length)).join('')}</div>
+      <div class="stack">${ds.map((t, j) => card(t, 'week', j + ms.length, k)).join('')}</div>
       <div class="wadds"><button class="wadd" data-add="${k}">+ to do</button><button class="wadd" data-add-meeting="${k}">+ meeting</button></div></div>`;
   }
   viewEl.innerHTML = h + '</div>';
@@ -376,8 +388,8 @@ function renderWeek() {
 
 /* ---- day ---- */
 function renderDay() {
-  const k = ymd(cursor), list = visible().filter(t => t.date === k);
-  const { m: ms, d: ds } = split(list);
+  const k = ymd(cursor), list = visible().filter(t => covers(t, k));
+  const { m: ms, d: ds } = split(list, k);
   const isToday = k === todayStr();
   $('#rangeLabel').innerHTML = `${isToday ? 'Today' : DAYS[cursor.getDay()]}, <em>${MON[cursor.getMonth()]} ${cursor.getDate()}</em>`;
   const open = ds.filter(t => !closedSt(t.status)).length;
@@ -385,14 +397,14 @@ function renderDay() {
     <div class="sec-label first">Meetings · ${ms.length}</div>
     <div class="stack">${ms.length ? ms.map((t, j) => mtgCard(t, 'day', j)).join('') : '<div class="sec-empty">no meetings</div>'}</div>
     <div class="sec-label">To do · ${open} left</div>
-    <div class="stack">${ds.length ? ds.map((t, j) => card(t, 'day', j + ms.length)).join('') : `<div class="empty-day"><svg><use href="#i-berry"/></svg>Nothing on the list. Paste an assignment or add one.</div>`}</div>
+    <div class="stack">${ds.length ? ds.map((t, j) => card(t, 'day', j + ms.length, k)).join('') : `<div class="empty-day"><svg><use href="#i-berry"/></svg>Nothing on the list. Paste an assignment or add one.</div>`}</div>
     <div class="wadds" style="margin-top:14px"><button class="wadd" data-add="${k}">+ to do</button><button class="wadd" data-add-meeting="${k}">+ meeting</button></div></div>`;
 }
 
 /* ---- list ---- */
 function renderList() {
   $('#rangeLabel').innerHTML = `All <em>tasks</em>`;
-  const list = visible().sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999') || (isMtg(b) - isMtg(a)) || todoSort(a, b));
+  const list = visible().sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999') || (isMtg(b) - isMtg(a)) || todoSort('')(a, b));
   if (!list.length) { viewEl.innerHTML = '<div class="empty">No tasks yet.</div>'; return; }
   viewEl.innerHTML = `<div class="tablewrap"><table class="table"><thead><tr><th>Status</th><th>Name</th><th>Class</th><th>Type</th><th>Date</th><th>Due by</th><th></th></tr></thead><tbody>
     ${list.map((t, i) => `<tr class="row s-${t.status}" data-id="${t.id}" style="--i:${Math.min(i, 30)}">
@@ -400,7 +412,7 @@ function renderList() {
       <td class="t-name">${t.isDue && !closedSt(t.status) ? '<span class="badge-due">DUE</span> ' : ''}${isMtg(t) ? `<span class="mono">${esc(t.start ? fmtTime(t.start) : 'meeting')}</span> ` : ''}${esc(cleanTitle(t))}${linkBtn(t)}</td>
       <td>${t.cls ? `<span class="tag ${tagColor(t.cls)}">${esc(t.cls)}</span>` : ''}</td>
       <td>${t.type ? `<span class="type ${HOT_TYPES.includes(t.type) ? 'hot' : ''}">${esc(t.type)}</span>` : ''}</td>
-      <td class="mono">${t.date ? fmtShort(t.date) : '—'}</td>
+      <td class="mono">${t.date ? fmtShort(t.date) + (t.endDate && t.endDate > t.date ? ' → ' + fmtShort(t.endDate) : '') : '—'}</td>
       <td class="mono">${t.due ? fmtShort(t.due) : ''}</td>
       <td><button class="mv" data-move-open="${t.id}">move</button></td></tr>`).join('')}
   </tbody></table></div>`;
@@ -477,7 +489,7 @@ function renderHero() {
   $('#greetWord').textContent = hr < 5 ? 'Up late,' : hr < 12 ? 'Good morning,' : hr < 17 ? 'Good afternoon,' : 'Good evening,';
   $('#todayKicker').textContent = `00 / Today · ${DAYS[now.getDay()]}, ${MONTHS[now.getMonth()]} ${now.getDate()}`;
   const t = todayStr();
-  const list = S.tasks.filter(x => x.date === t && x.status !== 'cancelled' && x.kind !== 'meeting');
+  const list = S.tasks.filter(x => covers(x, t) && x.status !== 'cancelled' && x.kind !== 'meeting');
   const done = list.filter(x => x.status === 'done').length;
   const pct = list.length ? done / list.length : 0;
   $('.p-fill').style.width = (pct * 100) + '%';
@@ -563,7 +575,8 @@ function toggleDone(id, el) {
 
 function moveTask(id, date) {
   const t = S.tasks.find(x => x.id === id); if (!t) return;
-  t.date = date || ''; t.rolled = 0; delete t.rolledFrom;
+  const len = t.endDate && t.date ? dayDiff(t.endDate, t.date) : 0;
+  t.date = date || ''; t.endDate = date && len > 0 ? ymd(addDays(parse(date), len)) : ''; t.rolled = 0; delete t.rolledFrom;
   save(); renderCalendar(); renderHero();
   toast(date ? `moved to ${fmtDay(date)}` : 'moved to no date');
 }
@@ -602,12 +615,12 @@ function animateOut(id, cb) {
 
 /* ---------------- task dialog ---------------- */
 const dlg = $('#taskDlg'); let editing = null;
-const F = { title: $('#fTitle'), link: $('#fLink'), status: $('#fStatus'), cls: $('#fClass'), type: $('#fType'), date: $('#fDate'), due: $('#fDue'), notes: $('#fNotes'), start: $('#fStart'), end: $('#fEnd'), isDue: $('#fIsDue') };
+const F = { title: $('#fTitle'), link: $('#fLink'), status: $('#fStatus'), cls: $('#fClass'), type: $('#fType'), date: $('#fDate'), due: $('#fDue'), notes: $('#fNotes'), start: $('#fStart'), end: $('#fEnd'), isDue: $('#fIsDue'), endDate: $('#fEndDate') };
 let curKind = 'task';
 function setKind(k) {
   curKind = k;
   $$('#fKind button').forEach(b => b.classList.toggle('on', b.dataset.kind === k));
-  $('#rowTime').hidden = k !== 'meeting'; $('#rowDue').hidden = k === 'meeting';
+  $('#rowTime').hidden = k !== 'meeting'; $('#rowDue').hidden = k === 'meeting'; $('#rowEnd').hidden = k === 'meeting';
 }
 $('#fKind').addEventListener('click', e => { const b = e.target.closest('[data-kind]'); if (b) setKind(b.dataset.kind); });
 function detectKind() {
@@ -617,6 +630,11 @@ function detectKind() {
   toast('looks like a meeting, switched it');
 }
 F.title.addEventListener('change', detectKind);
+$$('[data-endshift]').forEach(b => b.onclick = () => {
+  const v = b.dataset.endshift;
+  F.endDate.value = v === 'clear' ? '' : ymd(addDays(F.date.value ? parse(F.date.value) : parse(todayStr()), +v));
+  if (v !== 'clear' && !F.date.value) F.date.value = todayStr();
+});
 F.status.innerHTML = ['To-do', 'In progress', 'Complete'].map(g =>
   `<optgroup label="${g}">${STATUSES.filter(s => s.g === g).map(s => `<option value="${s.k}">${esc(s.label)}</option>`).join('')}</optgroup>`).join('');
 
@@ -628,7 +646,7 @@ function openTask(id, preset = {}) {
   $('#dlgKicker').textContent = id ? 'EDIT ITEM' : 'NEW ITEM';
   F.title.value = t.title || ''; F.link.value = t.link || ''; F.status.value = t.status || 'not-started';
   F.cls.value = t.cls || ''; F.type.value = t.type || ''; F.date.value = t.date || ''; F.due.value = t.due || ''; F.notes.value = t.notes || '';
-  setKind(t.kind || 'task'); F.start.value = t.start || ''; F.end.value = t.end || ''; F.isDue.checked = !!t.isDue;
+  setKind(t.kind || 'task'); F.start.value = t.start || ''; F.end.value = t.end || ''; F.isDue.checked = !!t.isDue; F.endDate.value = t.endDate || '';
   $('#fDelete').hidden = !id;
   const rolled = $('#fRolled');
   rolled.hidden = !(t.rolled && t.rolledFrom);
@@ -663,7 +681,8 @@ $('#taskForm').addEventListener('submit', e => {
   const title = F.title.value.trim();
   if (!title) { F.title.focus(); F.title.animate?.([{ transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }], { duration: 300 }); return; }
   const data = { title, link: safeUrl(F.link.value), status: F.status.value, cls: F.cls.value.trim(), type: F.type.value.trim(), date: F.date.value, due: F.due.value, notes: F.notes.value,
-    kind: curKind, start: curKind === 'meeting' ? F.start.value : '', end: curKind === 'meeting' ? F.end.value : '', isDue: curKind === 'task' && F.isDue.checked };
+    kind: curKind, start: curKind === 'meeting' ? F.start.value : '', end: curKind === 'meeting' ? F.end.value : '', isDue: curKind === 'task' && F.isDue.checked, endDate: curKind === 'task' ? F.endDate.value : '' };
+  if (!data.date || data.endDate <= data.date) data.endDate = '';
   if (data.kind === 'meeting' && !data.start) { const pt = parseTime(title); if (pt) { data.start = pt.start; data.end = pt.end; } }
   if (data.cls && !S.classes.includes(data.cls)) S.classes.push(data.cls);
   if (data.type && !S.types.includes(data.type)) S.types.push(data.type);

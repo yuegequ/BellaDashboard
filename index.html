@@ -187,6 +187,11 @@
             <div class="chips"><button type="button" data-shift="0">today</button><button type="button" data-shift="1">+1 day</button><button type="button" data-shift="7">+1 week</button></div>
           </div>
         </label>
+        <div class="frow" id="rowEnd"><span class="flab">Through</span>
+          <div class="date-wrap"><input id="fEndDate" type="date" class="f-input" aria-label="last day (for tasks that span days)">
+            <div class="chips"><button type="button" data-endshift="1">+1 day</button><button type="button" data-endshift="2">+2 days</button><button type="button" data-endshift="7">+1 week</button><button type="button" data-endshift="clear">one day only</button></div>
+          </div>
+        </div>
         <div class="frow" id="rowTime" hidden><span class="flab">Time</span>
           <div class="time-wrap"><input id="fStart" type="time" class="f-input" aria-label="start time"><span>to</span><input id="fEnd" type="time" class="f-input" aria-label="end time"></div>
         </div>

@@ -642,3 +642,9 @@ li.done .box{background:var(--blush);border-color:var(--rose)}
 }
 
 #calendar,#notes{scroll-margin-top:70px}
+[hidden]{display:none!important}
+
+/* multi-day tasks */
+.card.span{border-style:dashed;border-color:#d3ccbc}
+.card.span.due{border-style:solid}
+.card.span .c-sub span:first-child{color:var(--celadon-d);font-weight:500}
