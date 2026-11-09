@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#efebe2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Berry List">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Berry List</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="bg3d" aria-hidden="true"></canvas>
+<div class="cursor" id="cursor"></div>
+<div class="loader" id="loader">
+  <div class="lw"><svg><use href="#i-berry"/></svg>BERRY LIST</div>
+  <div class="lt"><span>A porcelain place for <em>every little thing</em></span></div>
+  <div class="lc" id="loaderCount">0</div>
+  <div class="lbar" id="loaderBar"></div>
+</div>
+
+<!-- fruit sprites -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-berry" viewBox="0 0 100 112">
+      <path d="M50 104C30 98 10 74 11 50C12 36 24 29 38 31C43 32 47 33 50 33C53 33 57 32 62 31C76 29 88 36 89 50C90 74 70 98 50 104Z" fill="#fff" stroke="#111" stroke-width="4" stroke-linejoin="round"/>
+      <g fill="#111">
+        <ellipse cx="32" cy="50" rx="1.9" ry="3"/><ellipse cx="50" cy="55" rx="1.9" ry="3"/><ellipse cx="68" cy="50" rx="1.9" ry="3"/>
+        <ellipse cx="24" cy="64" rx="1.9" ry="3"/><ellipse cx="41" cy="67" rx="1.9" ry="3"/><ellipse cx="59" cy="67" rx="1.9" ry="3"/><ellipse cx="76" cy="64" rx="1.9" ry="3"/>
+        <ellipse cx="33" cy="80" rx="1.9" ry="3"/><ellipse cx="50" cy="81" rx="1.9" ry="3"/><ellipse cx="67" cy="80" rx="1.9" ry="3"/>
+        <ellipse cx="42" cy="93" rx="1.9" ry="3"/><ellipse cx="58" cy="93" rx="1.9" ry="3"/>
+      </g>
+      <path d="M50 36C44 28 32 24 22 28C30 31 36 34 40 38C32 40 26 46 25 52C34 48 42 44 50 41C58 44 66 48 75 52C74 46 68 40 60 38C64 34 70 31 78 28C68 24 56 28 50 36Z" fill="#111"/>
+      <path d="M50 34C50 24 53 15 59 8" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-grape" viewBox="0 0 100 112">
+      <path d="M50 28C50 19 54 11 61 6" stroke="#111" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M54 21C60 9 78 6 89 13C81 24 65 27 54 21Z" fill="#fff" stroke="#111" stroke-width="3.5" stroke-linejoin="round"/>
+      <g fill="#111" stroke="#fff" stroke-width="2.5">
+        <circle cx="50" cy="91" r="13"/>
+        <circle cx="38" cy="70" r="13"/><circle cx="62" cy="70" r="13"/>
+        <circle cx="26" cy="48" r="13"/><circle cx="50" cy="48" r="13"/><circle cx="74" cy="48" r="13"/>
+      </g>
+      <g fill="#fff"><circle cx="45" cy="86" r="2.6"/><circle cx="33" cy="65" r="2.6"/><circle cx="57" cy="65" r="2.6"/><circle cx="21" cy="43" r="2.6"/><circle cx="45" cy="43" r="2.6"/><circle cx="69" cy="43" r="2.6"/></g>
+    </symbol>
+    <symbol id="i-rosette" viewBox="0 0 100 100"><path d="M5 5H95V95H5ZM10.5 10.5V89.5H89.5V10.5Z" fill-rule="evenodd"/><path d="M50 50C38 43 37 24 50 13C63 24 62 43 50 50Z" transform="rotate(0 50 50)"/><path d="M50 50C38 43 37 24 50 13C63 24 62 43 50 50Z" transform="rotate(45 50 50)"/><path d="M50 50C38 43 37 24 50 13C63 24 62 43 50 50Z" transform="rotate(90 50 50)"/><path d="M50 50C38 43 37 24 50 13C63 24 62 43 50 50Z" transform="rotate(135 50 50)"/><path d="M50 50C38 43 37 24 50 13C63 24 62 43 50 50Z" transform="rotate(180 50 50)"/><path d="M50 50C38 43 37 24 50 13C63 24 62 43 50 50Z" transform="rotate(225 50 50)"/><path d="M50 50C38 43 37 24 50 13C63 24 62 43 50 50Z" transform="rotate(270 50 50)"/><path d="M50 50C38 43 37 24 50 13C63 24 62 43 50 50Z" transform="rotate(315 50 50)"/><path d="M50 50C44 45 43 35 50 28C57 35 56 45 50 50Z" transform="rotate(22.5 50 50)"/><path d="M50 50C44 45 43 35 50 28C57 35 56 45 50 50Z" transform="rotate(67.5 50 50)"/><path d="M50 50C44 45 43 35 50 28C57 35 56 45 50 50Z" transform="rotate(112.5 50 50)"/><path d="M50 50C44 45 43 35 50 28C57 35 56 45 50 50Z" transform="rotate(157.5 50 50)"/><path d="M50 50C44 45 43 35 50 28C57 35 56 45 50 50Z" transform="rotate(202.5 50 50)"/><path d="M50 50C44 45 43 35 50 28C57 35 56 45 50 50Z" transform="rotate(247.5 50 50)"/><path d="M50 50C44 45 43 35 50 28C57 35 56 45 50 50Z" transform="rotate(292.5 50 50)"/><path d="M50 50C44 45 43 35 50 28C57 35 56 45 50 50Z" transform="rotate(337.5 50 50)"/><path d="M11 11C25 12 31 21 29 31C20 29 13 22 11 11Z" transform="rotate(0 50 50)"/><path d="M11 11C25 12 31 21 29 31C20 29 13 22 11 11Z" transform="rotate(90 50 50)"/><path d="M11 11C25 12 31 21 29 31C20 29 13 22 11 11Z" transform="rotate(180 50 50)"/><path d="M11 11C25 12 31 21 29 31C20 29 13 22 11 11Z" transform="rotate(270 50 50)"/><circle cx="50" cy="50" r="7"/></symbol>
+    <filter id="emboss" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.8" result="b"/>
+      <feOffset in="b" dx="1.2" dy="1.8" result="o"/>
+      <feFlood flood-color="#6b5a3c" flood-opacity=".1"/>
+      <feComposite in2="o" operator="in" result="shadow"/>
+      <feDiffuseLighting in="b" surfaceScale="2.6" diffuseConstant="1.15" lighting-color="#ffffff" result="d"><feDistantLight azimuth="235" elevation="48"/></feDiffuseLighting>
+      <feComposite in="d" in2="SourceAlpha" operator="in" result="d2"/>
+      <feComposite in="SourceGraphic" in2="d2" operator="arithmetic" k1=".45" k2=".55" result="m"/>
+      <feSpecularLighting in="b" surfaceScale="3.5" specularConstant=".8" specularExponent="30" lighting-color="#ffffff" result="s"><feDistantLight azimuth="235" elevation="42"/></feSpecularLighting>
+      <feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+      <feComposite in="m" in2="s2" operator="arithmetic" k2="1" k3=".9" result="lit"/>
+      <feMerge><feMergeNode in="shadow"/><feMergeNode in="lit"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <a class="wordmark" href="#top"><svg><use href="#i-berry"/></svg><span>BERRY LIST</span></a>
+  <nav class="topnav">
+    <a href="#calendar">01 Calendar <span>↘</span></a>
+    <a href="#notes">02 Notes <span>↘</span></a>
+  </nav>
+  <div class="quick" id="quick">
+    <button class="quick-btn" id="quickBtn" aria-haspopup="true" aria-expanded="false">Quick links <span>↓</span></button>
+    <div class="quick-menu" id="quickMenu"></div>
+  </div>
+  <button class="sync-chip" id="syncChip" title="Sync between laptop and phone"><i></i><span>local only</span></button>
+</header>
+
+<section class="hero" id="top">
+  <div class="hero-top"><span id="todayKicker">00 / TODAY</span><span class="zh">今日事今日毕</span></div>
+  <h1 id="greeting"><span class="ln"><span id="greetWord">Good morning,</span></span><span class="ln"><span><em>Bella</em></span></span></h1>
+
+  <div class="progress" id="progress">
+    <div class="p-track"><div class="p-fill"></div><div class="p-marker"><svg><use href="#i-berry"/></svg></div></div>
+    <div class="p-labels">
+      <span><b class="dotb"></b> done <b id="pDone">0</b></span>
+      <span id="pMid">0 on today</span>
+      <span>left <b id="pLeft">0</b> <b class="doto"></b></span>
+    </div>
+  </div>
+
+  <div class="scroll-cue"><i></i>scroll</div>
+  <div class="floaters" aria-hidden="true">
+    <div class="fl" style="--d:-14;right:5%;top:16%;width:150px;height:168px"><svg style="--t:7s;--r0:-8deg;--r1:5deg"><use href="#i-berry"/></svg></div>
+    <div class="fl" style="--d:10;right:21%;top:46%;width:112px;height:126px"><svg style="--t:6s;--dl:-2s;--r0:6deg;--r1:-6deg"><use href="#i-grape"/></svg></div>
+    <div class="fl" style="--d:-22;right:31%;top:8%;width:52px;height:58px"><svg style="--t:5s;--dl:-1s"><use href="#i-berry"/></svg></div>
+    <div class="fl" style="--d:18;right:2%;top:66%;width:60px;height:68px"><svg style="--t:8s;--dl:-3s"><use href="#i-grape"/></svg></div>
+  </div>
+</section>
+
+<div class="tiles" id="tileStrip" aria-hidden="true"></div>
+<section id="calendar" class="block">
+  <div class="block-head reveal">
+    <span class="kicker">01 / <span class="zh">日历</span> CALENDAR</span>
+    <h2 id="rangeLabel">November <em>2026</em></h2>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg" id="viewSeg">
+      <button data-view="day">Day</button><button data-view="week">Week</button><button data-view="month">Month</button><button data-view="list">List</button>
+    </div>
+    <div class="navbtns">
+      <button id="prev" aria-label="Previous">←</button>
+      <button id="todayBtn">Today</button>
+      <button id="next" aria-label="Next">→</button>
+    </div>
+    <div class="spacer"></div>
+    <select id="classFilter" class="pill-select" aria-label="Filter by class"></select>
+    <label class="toggle"><input type="checkbox" id="hideDone"><span>hide done</span></label>
+    <button class="btn ink" id="newTask">+ New</button>
+  </div>
+
+  <div id="view" class="view"></div>
+  <div id="tray"></div>
+  <p class="hint">tip: paste an assignment anywhere on the page to add it (links come along). <kbd>N</kbd> = new, <kbd>←</kbd><kbd>→</kbd> = move around. In progress / stuck tasks roll over to the next day on their own.</p>
+</section>
+
+<div class="fret"></div>
+<section id="notes" class="block">
+  <div class="block-head reveal">
+    <span class="kicker">02 / <span class="zh">笔记</span> NOTES</span>
+    <h2>Little lists. <em>Big brain.</em></h2>
+  </div>
+  <div class="toolbar"><button class="btn ink" id="newSection">+ New section</button></div>
+  <div id="sections" class="sections"></div>
+</section>
+
+<footer>
+  <div class="marquee" aria-hidden="true"><div class="track" id="track"></div></div>
+  <div class="foot">
+    <span>Berry List / made for Bella</span>
+    <span class="spacer"></span>
+    <button class="btn sm" id="syncBtn">Sync settings</button>
+    <button class="btn sm" id="exportBtn">Export backup</button>
+    <button class="btn sm" id="importBtn">Import</button>
+    <button class="btn sm ghost" id="resetBtn">Reset</button>
+  </div>
+</footer>
+
+<!-- move popover -->
+<div class="move-pop" id="movePop" hidden>
+  <div class="mp-title">Move to</div>
+  <button data-move="0">Today</button>
+  <button data-move="1">Tomorrow</button>
+  <button data-move="2">In 2 days</button>
+  <button data-move="7">Next week</button>
+  <label class="mp-pick">pick a date <input type="date" id="movePick"></label>
+  <button data-move="none" class="mp-ghost">No date</button>
+</div>
+
+<!-- task dialog -->
+<dialog id="taskDlg" data-lenis-prevent>
+  <form method="dialog" id="taskForm">
+    <div class="dlg-in">
+      <div class="kicker" id="dlgKicker">NEW TASK</div>
+      <input id="fTitle" class="f-title" placeholder="Assignment name, paste it in" autocomplete="off">
+      <div class="link-row" id="linkRow">
+        <span class="lr-icon">↗</span>
+        <input id="fLink" class="f-input" placeholder="link (fills in when you paste a linked title)" autocomplete="off" inputmode="url">
+        <a id="fLinkOpen" class="btn sm" target="_blank" rel="noopener" hidden>open</a>
+      </div>
+      <div class="f-grid">
+        <label><span>Status</span><select id="fStatus" class="f-input"></select></label>
+        <label><span>Class</span><input id="fClass" class="f-input" list="classList" autocomplete="off" placeholder="pick or type new"></label>
+        <label><span>Type</span><input id="fType" class="f-input" list="typeList" autocomplete="off" placeholder="pick or type new"></label>
+        <label><span>Date</span>
+          <div class="date-wrap"><input id="fDate" type="date" class="f-input">
+            <div class="chips"><button type="button" data-shift="0">today</button><button type="button" data-shift="1">+1 day</button><button type="button" data-shift="7">+1 week</button></div>
+          </div>
+        </label>
+        <label><span>Due by</span><input id="fDue" type="date" class="f-input"></label>
+      </div>
+      <label class="f-notes"><span>Notes</span><textarea id="fNotes" class="f-input" rows="3" placeholder="links, reminders, anything"></textarea></label>
+      <div class="found" id="fFound"></div>
+      <div class="rolled-note" id="fRolled" hidden></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="link-danger" id="fDelete">delete</button>
+      <button type="button" class="btn" id="fCancel">Cancel</button>
+      <button type="submit" class="btn ink" id="fSave">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- new section dialog -->
+<dialog id="secDlg" data-lenis-prevent>
+  <form method="dialog" id="secForm">
+    <div class="dlg-in">
+      <div class="kicker">NEW SECTION</div>
+      <input id="sName" class="f-title" placeholder="Name it (Groceries, Packing…)" autocomplete="off">
+      <div class="sub">Template</div>
+      <div class="tpls" id="tpls"></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn" id="sCancel">Cancel</button>
+      <button type="submit" class="btn ink">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- sync dialog -->
+<dialog id="syncDlg" data-lenis-prevent>
+  <form method="dialog" id="syncForm">
+    <div class="dlg-in">
+      <div class="kicker">SYNC / LAPTOP + PHONE</div>
+      <h3 class="dlg-h">Same list, <em>every device.</em></h3>
+      <p class="small">Your list saves to a private GitHub Gist so your laptop and phone stay in sync. Do this once on each device:</p>
+      <ol class="small steps">
+        <li>Go to <a href="https://github.com/settings/tokens/new?scopes=gist&description=Berry%20List" target="_blank" rel="noopener">github.com/settings/tokens/new</a> (classic token).</li>
+        <li>Tick only <b>gist</b>, set expiration to "No expiration", generate.</li>
+        <li>Paste the token below. Use the same token on your phone.</li>
+      </ol>
+      <input id="syncToken" class="f-input" placeholder="ghp_…" autocomplete="off" spellcheck="false">
+      <p class="small mute" id="syncStatus">Not connected. Everything is only saved in this browser.</p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="link-danger" id="syncOff">disconnect</button>
+      <button type="button" class="btn" id="syncCancel">Close</button>
+      <button type="submit" class="btn ink">Connect + sync</button>
+    </div>
+  </form>
+</dialog>
+
+<datalist id="classList"></datalist>
+<datalist id="typeList"></datalist>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="app.js"></script>
+<script type="module" src="bg.js"></script>
+</body>
+</html>
