@@ -7,7 +7,7 @@
   --pad:clamp(16px,4vw,56px);
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth;background:var(--bg)}
+html{background:var(--bg)}
 body{margin:0;background:transparent;color:var(--ink);font:300 14px/1.5 var(--sans);letter-spacing:.005em;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:inherit}
 button{font:inherit;color:inherit;cursor:pointer}
@@ -614,7 +614,7 @@ li.done .box{background:var(--blush);border-color:var(--rose)}
 
 /* dialog bits */
 .f-grid>.frow{display:grid;grid-template-columns:84px 1fr;align-items:center;gap:10px;padding:5px 0}
-.frow>.fl{font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
+.frow>.flab{font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
 .frow[hidden]{display:none}
 .kind-seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--paper);width:max-content}
 .kind-seg button{border:0;background:none;border-radius:999px;padding:5px 14px;font-size:13px;transition:background .3s,color .3s}
@@ -640,3 +640,5 @@ li.done .box{background:var(--blush);border-color:var(--rose)}
   .week .mtg .m-top{flex-wrap:nowrap}
   .week .mtg .m-title{flex:1 1 auto;order:0}
 }
+
+#calendar,#notes{scroll-margin-top:70px}

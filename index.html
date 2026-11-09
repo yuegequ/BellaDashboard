@@ -97,10 +97,10 @@
 
   <div class="scroll-cue"><i></i>scroll</div>
   <div class="floaters" aria-hidden="true">
-    <div class="fl" style="--d:-14;right:5%;top:16%;width:150px;height:168px"><svg style="--t:7s;--r0:-8deg;--r1:5deg"><use href="#i-berry"/></svg></div>
-    <div class="fl" style="--d:10;right:21%;top:46%;width:112px;height:126px"><svg style="--t:6s;--dl:-2s;--r0:6deg;--r1:-6deg"><use href="#i-grape"/></svg></div>
-    <div class="fl" style="--d:-22;right:31%;top:8%;width:52px;height:58px"><svg style="--t:5s;--dl:-1s"><use href="#i-berry"/></svg></div>
-    <div class="fl" style="--d:18;right:2%;top:66%;width:60px;height:68px"><svg style="--t:8s;--dl:-3s"><use href="#i-grape"/></svg></div>
+    <div class="flab" style="--d:-14;right:5%;top:16%;width:150px;height:168px"><svg style="--t:7s;--r0:-8deg;--r1:5deg"><use href="#i-berry"/></svg></div>
+    <div class="flab" style="--d:10;right:21%;top:46%;width:112px;height:126px"><svg style="--t:6s;--dl:-2s;--r0:6deg;--r1:-6deg"><use href="#i-grape"/></svg></div>
+    <div class="flab" style="--d:-22;right:31%;top:8%;width:52px;height:58px"><svg style="--t:5s;--dl:-1s"><use href="#i-berry"/></svg></div>
+    <div class="flab" style="--d:18;right:2%;top:66%;width:60px;height:68px"><svg style="--t:8s;--dl:-3s"><use href="#i-grape"/></svg></div>
   </div>
 </section>
 
@@ -165,7 +165,7 @@
 </div>
 
 <!-- task dialog -->
-<dialog id="taskDlg" data-lenis-prevent>
+<dialog id="taskDlg">
   <form method="dialog" id="taskForm">
     <div class="dlg-in">
       <div class="kicker" id="dlgKicker">NEW TASK</div>
@@ -176,7 +176,7 @@
         <a id="fLinkOpen" class="btn sm" target="_blank" rel="noopener" hidden>open</a>
       </div>
       <div class="f-grid">
-        <div class="frow"><span class="fl">Kind</span>
+        <div class="frow"><span class="flab">Kind</span>
           <div class="kind-seg" id="fKind"><button type="button" data-kind="task">To do</button><button type="button" data-kind="meeting">Meeting</button></div>
         </div>
         <label><span>Status</span><select id="fStatus" class="f-input"></select></label>
@@ -187,11 +187,11 @@
             <div class="chips"><button type="button" data-shift="0">today</button><button type="button" data-shift="1">+1 day</button><button type="button" data-shift="7">+1 week</button></div>
           </div>
         </label>
-        <div class="frow" id="rowTime" hidden><span class="fl">Time</span>
+        <div class="frow" id="rowTime" hidden><span class="flab">Time</span>
           <div class="time-wrap"><input id="fStart" type="time" class="f-input" aria-label="start time"><span>to</span><input id="fEnd" type="time" class="f-input" aria-label="end time"></div>
         </div>
         <label><span>Due by</span><input id="fDue" type="date" class="f-input"></label>
-        <div class="frow" id="rowDue"><span class="fl">Red flag</span>
+        <div class="frow" id="rowDue"><span class="flab">Red flag</span>
           <label class="toggle"><input type="checkbox" id="fIsDue"><span>due this day</span></label>
         </div>
       </div>
@@ -208,7 +208,7 @@
 </dialog>
 
 <!-- new section dialog -->
-<dialog id="secDlg" data-lenis-prevent>
+<dialog id="secDlg">
   <form method="dialog" id="secForm">
     <div class="dlg-in">
       <div class="kicker">NEW SECTION</div>
@@ -224,7 +224,7 @@
 </dialog>
 
 <!-- sync dialog -->
-<dialog id="syncDlg" data-lenis-prevent>
+<dialog id="syncDlg">
   <form method="dialog" id="syncForm">
     <div class="dlg-in">
       <div class="kicker">SYNC / LAPTOP + PHONE</div>
@@ -251,7 +251,6 @@
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
 <script src="app.js"></script>
 <script type="module" src="bg.js"></script>
 </body>

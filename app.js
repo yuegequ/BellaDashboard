@@ -75,11 +75,8 @@ const hm = (h, m) => `${pad(h)}:${pad(m)}`;
 const h24 = (h, ap) => ap === 'pm' ? (h % 12) + 12 : ap === 'am' ? (h % 12) : h;
 function parseTime(title) {
   const s = title || '';
-  for (const m of s.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?![\d:])/gi)) {
-    if (!(m[2] || m[3] || m[5] || m[6])) continue;          // "10-12" alone is not a time
-    let sh = +m[1], sm = +(m[2] || 0), eh = +m[4], em = +(m[5] || 0);
-    if (sh > 23 || eh > 23 || sm > 59 || em > 59) continue;
-    const sa = m[3] && m[3].toLowerCase(), ea = m[6] && m[6].toLowerCase();
+  const deadline = idx => /\b(due|by|before|until)\s*(at\s*)?$/i.test(s.slice(Math.max(0, idx - 14), idx));
+  const fin = (sh, sm, sa, eh, em, ea, match) => {
     if (sh > 12 || eh > 12) { /* already 24h */ }
     else if (sa || ea) {
       let S = sa ? h24(sh, sa) : null, E = ea ? h24(eh, ea) : null;
@@ -91,12 +88,28 @@ function parseTime(title) {
       eh = eh % 12; while (eh * 60 + em <= sh * 60 + sm) eh += 12;
     }
     if (eh > 23) eh = 23;
-    return { start: hm(sh, sm), end: hm(eh, em), match: m[0] };
+    return { start: hm(sh, sm), end: hm(eh, em), match };
+  };
+  // 7:30-9:30, 12-1pm, 10am - 11:30am
+  for (const m of s.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?![\d:])/gi)) {
+    if (!(m[2] || m[3] || m[5] || m[6])) continue;          // "10-12" alone is not a time
+    const sh = +m[1], sm = +(m[2] || 0), eh = +m[4], em = +(m[5] || 0);
+    if (sh > 23 || eh > 23 || sm > 59 || em > 59 || deadline(m.index)) continue;
+    return fin(sh, sm, m[3] && m[3].toLowerCase(), eh, em, m[6] && m[6].toLowerCase(), m[0]);
   }
+  // 800 - 900, 1330-1430
+  for (const m of s.matchAll(/(?<![\d:/.-])(\d{3,4})\s*(am|pm)?\s*(?:-|–|—|to)\s*(\d{3,4})\s*(am|pm)?(?![\d:/.-])/gi)) {
+    const a = m[1].padStart(4, '0'), b = m[3].padStart(4, '0');
+    const sh = +a.slice(0, 2), sm = +a.slice(2), eh = +b.slice(0, 2), em = +b.slice(2);
+    if (sh > 23 || eh > 23 || sm > 59 || em > 59 || deadline(m.index)) continue;
+    return fin(sh, sm, m[2] && m[2].toLowerCase(), eh, em, m[4] && m[4].toLowerCase(), m[0]);
+  }
+  // 4:20 pm, 6pm
   const m1 = s.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
-  if (m1 && +m1[1] <= 12 && +(m1[2] || 0) < 60) return { start: hm(h24(+m1[1], m1[3].toLowerCase()), +(m1[2] || 0)), end: '', match: m1[0] };
+  if (m1 && +m1[1] <= 12 && +(m1[2] || 0) < 60 && !deadline(m1.index)) return { start: hm(h24(+m1[1], m1[3].toLowerCase()), +(m1[2] || 0)), end: '', match: m1[0] };
+  // 7:30 (no am/pm)
   const m2 = s.match(/\b(\d{1,2}):(\d{2})\b/);
-  if (m2 && +m2[1] <= 23 && +m2[2] < 60) {
+  if (m2 && +m2[1] <= 23 && +m2[2] < 60 && !deadline(m2.index)) {
     let h = +m2[1]; if (h <= 12 && ((h >= 1 && h <= 7) || h === 12)) h = (h % 12) + 12;
     return { start: hm(h, +m2[2]), end: '', match: m2[0] };
   }
@@ -112,9 +125,9 @@ function timeRange(t) {
   return a.ap === b.ap ? `${a.n} – ${b.n} ${b.ap}` : `${a.n} ${a.ap} – ${b.n} ${b.ap}`;
 }
 const fmtDur = ms => { const m = Math.max(1, Math.ceil(ms / 60000)); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`; };
-function normalizeTasks(list) {
+function normalizeTasks(list, force) {
   for (const t of list) {
-    if (!t.kind) {
+    if (!t.kind || (force && t.kind === 'task' && !t.start)) {
       const p = parseTime(t.title);
       if (p) { t.kind = 'meeting'; t.start = p.start; t.end = p.end; } else t.kind = 'task';
     }
@@ -141,7 +154,7 @@ function defaults() {
 function load() {
   try {
     const r = JSON.parse(localStorage.getItem(KEY));
-    if (r && Array.isArray(r.tasks)) { const o = Object.assign(defaults(), r); normalizeTasks(o.tasks); return o; }
+    if (r && Array.isArray(r.tasks)) { const o = Object.assign(defaults(), r); normalizeTasks(o.tasks, !o.timeMig); o.timeMig = true; return o; }
   } catch {}
   const s = defaults(); s.tasks = seedTasks(); s.notes = seedNotes(); normalizeTasks(s.tasks); return s;
 }
@@ -180,7 +193,7 @@ function seedTasks() {
     T('due Introductions & Group Formation + Team Networking Comment','INFO 280','','done','2026-11-08','2026-11-09'),
     T('Costco Appl','work/intern','','not-started','2026-11-08','2026-11-03', RED),
     T('MIDTERM','G H 101 A','Midterm','not-started','2026-11-09','', RED),
-    T('7:30-9:30 PCT Pledge QUIZ','CLUBS','','not-started','2026-11-09','', RED),
+    T('7:30-9:30 PCT Pledge QUIZ','CLUBS','','not-started','2026-11-09','', { kind: 'meeting', start: '19:30', end: '21:30' }),
     T('PCT Active 1-1 emailing','CLUBS','','not-started','2026-11-11',''),
     T('12:00-1:00pm PCT 1-1 w April','CLUBS','','not-started','2026-11-13','', { kind: 'meeting', start: '12:00', end: '13:00' }),
     T('STUDY FOR EXAM','INFO 201','','not-started','2026-11-14','', RED),
@@ -997,28 +1010,10 @@ const mq = `<span>Strawberries</span><svg><use href="#i-berry"/></svg><span><em>
 $('#track').innerHTML = mq + mq + mq + mq;
 
 /* ---------------- immersive layer: loader, smooth scroll, cursor, reveals ---------------- */
-let lenis = null;
-if (window.Lenis && !TOUCH && !REDUCED) {
-  lenis = new Lenis({ lerp: 0.08, smoothWheel: true, wheelMultiplier: 0.9 });
-  const raf = t => { lenis.raf(t); requestAnimationFrame(raf); };
-  requestAnimationFrame(raf);
-  // pause smooth scroll while a dialog or popover is open
-  new MutationObserver(() => document.querySelector('dialog[open]') ? lenis.stop() : lenis.start())
-    .observe(document.body, { attributes: true, subtree: true, attributeFilter: ['open'] });
-}
-$$('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
-  const target = $(a.getAttribute('href')); if (!target) return;
-  e.preventDefault();
-  if (lenis) lenis.scrollTo(target, { offset: -60, duration: 1.8 });
-  else target.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth' });
-}));
-
 const topbar = $('.topbar'); let lastY = 0;
 addEventListener('scroll', () => {
   const y = scrollY;
   topbar.classList.toggle('scrolled', y > 30);
-  topbar.classList.toggle('hide', y > 500 && y > lastY + 2 && !document.querySelector('dialog[open]'));
-  if (y < lastY - 2) topbar.classList.remove('hide');
   lastY = y;
   if (!movePop.hidden) closeMove();
   if (!statusPop.hidden) closeStatus();
@@ -1097,6 +1092,5 @@ renderAll();
 runLoader();
 setInterval(updateMtgBars, 20000);
 document.addEventListener('visibilitychange', updateMtgBars);
-if (!window.Lenis) document.documentElement.style.scrollBehavior = 'smooth';
 window.__berry = { burst };
 })();
