@@ -541,3 +541,102 @@ li.done .box{background:var(--blush);border-color:var(--rose)}
 .tiles{grid-template-columns:repeat(12,1fr)}
 .tile:nth-child(n+13){display:none}
 @media (max-width:760px){.tiles{grid-template-columns:repeat(4,1fr)}.tile:nth-child(n+9){display:none}}
+
+/* ---------- meetings pinned on top + to-do below ---------- */
+:root{--red:#dc7f76;--red-d:#b5564d;--red-l:#fdeeeb;--red-b:#f1c9c3}
+.sec-label{display:flex;align-items:center;gap:8px;font:400 10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin:12px 0 6px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--line)}
+.sec-label.first{margin-top:6px}
+.sec-empty{font:11px var(--mono);color:#bdb7a9;padding:0 2px 2px}
+.sep{height:1px;background:var(--line);margin:3px 0}
+.day .sec-label{margin-top:22px}.day .sec-label.first{margin-top:0}
+
+/* meeting card */
+.mtg{position:relative;background:linear-gradient(180deg,#f3f8f8,var(--paper));border:1px solid var(--celadon-l);border-radius:12px;padding:9px 10px 10px;cursor:pointer;box-shadow:inset 3px 0 0 var(--celadon-d),var(--glaze);
+  animation:pop .45s var(--ease) both;animation-delay:calc(var(--i,0)*28ms);transition:transform .25s var(--spring),box-shadow .25s}
+.mtg:hover{transform:translateY(-2px)}
+.mtg.dragging{opacity:.35}
+.mtg.leaving{animation:leave .35s var(--ease) forwards}
+.m-top{display:flex;gap:8px;align-items:flex-start}
+.m-top .dot{margin-top:2px}
+.m-time{font:500 11px/1.3 var(--sans);letter-spacing:.03em;color:#4f6a6f;white-space:nowrap;padding-top:2px;background:var(--celadon-l);border-radius:6px;padding:2px 6px}
+.m-title{flex:1;min-width:0;font-size:13px;line-height:1.3;word-break:break-word;padding-top:1px}
+.m-bar{position:relative;height:4px;border-radius:99px;background:rgba(155,179,183,.28);margin:9px 3px 0 0}
+.m-bar i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:99px;background:linear-gradient(90deg,var(--celadon),var(--celadon-d));transition:width 1.4s var(--ease)}
+.m-bar i::after{content:'';position:absolute;right:-4px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:#fff;border:1.5px solid var(--celadon-d);box-shadow:0 1px 3px rgba(70,58,30,.25)}
+.m-sub{font:10.5px var(--mono);color:var(--mute);margin-top:6px;min-height:1em}
+.mtg.live{box-shadow:inset 3px 0 0 var(--rose-d),var(--glaze);background:linear-gradient(180deg,#fdf5f3,var(--paper));border-color:var(--blush)}
+.mtg.live .m-bar{background:rgba(207,167,159,.28)}
+.mtg.live .m-bar i{background:linear-gradient(90deg,var(--rose),var(--rose-d))}
+.mtg.live .m-bar i::after{border-color:var(--rose-d);animation:pulse 1.6s ease-in-out infinite}
+.mtg.live .m-sub{color:var(--rose-d)}
+.mtg.past:not(.live){opacity:.6}
+.mtg.s-done{background:rgba(239,235,226,.55);border-color:transparent;box-shadow:inset 3px 0 0 var(--line)}
+.mtg.s-done .m-title{text-decoration:line-through;color:var(--mute)}
+@keyframes pulse{50%{transform:scale(1.5);opacity:.6}}
+.mtg .mv{flex:none}
+.mtg.mini{padding:4px 6px 5px;border-radius:8px}
+.mtg.mini .m-top{align-items:center;gap:5px}
+.mtg.mini .m-time{font-size:10px;padding:1px 4px}
+.mtg.mini .m-title{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mtg.mini .dot{width:12px;height:12px;margin:0}
+.mtg.mini .m-bar{height:3px;margin-top:5px}
+.mtg.mini .m-bar i::after{width:7px;height:7px;margin-top:-3.5px;right:-3px}
+.mtg.mini .m-sub,.mtg.mini .mv,.month .mtg .c-link{display:none}
+.week .mtg .mv{display:none}
+.week .mtg:hover .mv{display:block}
+.day .mtg{padding:14px 16px;border-radius:16px}
+.day .mtg .m-title{font-size:16px}
+.day .mtg .m-time{font-size:12px}
+
+/* red = due that day */
+.card.due{background:linear-gradient(180deg,var(--red-l),var(--paper));border-color:var(--red-b);box-shadow:inset 3px 0 0 var(--red),var(--glaze)}
+.card.due .dot{border-color:var(--red-d)}
+.card.due:hover{border-color:var(--red)}
+.badge-due{display:inline-block;font:600 9px/1 var(--sans);letter-spacing:.1em;background:var(--red);color:#fff;border-radius:999px;padding:3px 6px;vertical-align:1px}
+.month .badge-due{font-size:7.5px;padding:2px 4px}
+.table .badge-due{margin-right:4px}
+
+/* status pill */
+.st-pill{border:0;border-radius:999px;padding:4px 9px;font:400 10.5px/1 var(--sans);background:var(--soft);color:#6b6558;transition:background .2s,transform .25s var(--spring)}
+.st-pill:hover{background:var(--celadon-l);transform:translateY(-1px)}
+.s-in-progress .st-pill{background:var(--celadon-l);color:#4f6a6f}
+.s-stuck .st-pill{background:var(--blush);color:#85605a}
+.s-done .st-pill,.s-cancelled .st-pill{background:transparent;color:var(--mute);box-shadow:inset 0 0 0 1px var(--line)}
+.month .st-pill{display:none}
+.mp-sep{height:1px;background:var(--line);margin:4px 0}
+.move-pop button.cur{background:var(--celadon-l)}
+.move-pop button.flag{color:var(--red-d)}
+
+/* add buttons under each day */
+.wadds{margin-top:auto;display:flex;gap:6px}
+.wadds .wadd{flex:1;margin-top:0;padding:8px 4px;font-size:12px}
+
+/* dialog bits */
+.f-grid>.frow{display:grid;grid-template-columns:84px 1fr;align-items:center;gap:10px;padding:5px 0}
+.frow>.fl{font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
+.frow[hidden]{display:none}
+.kind-seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--paper);width:max-content}
+.kind-seg button{border:0;background:none;border-radius:999px;padding:5px 14px;font-size:13px;transition:background .3s,color .3s}
+.kind-seg button.on{background:var(--ink);color:var(--paper)}
+.time-wrap{display:flex;align-items:center;gap:8px}
+.time-wrap span{color:var(--mute);font-size:12px}
+.time-wrap .f-input{flex:1;width:auto}
+.frow .toggle{width:max-content}
+@media (max-width:760px){
+  .f-grid>.frow{grid-template-columns:1fr;gap:4px}
+  .mtg:not(.mini) .mv{display:block}
+  .month .mtg .m-title{font-size:10.5px}
+  .month .mtg .m-time{display:none}
+}
+
+/* narrow columns (week + tray): time chip on its own line, title below */
+.week .mtg .m-top,.tray .mtg .m-top{flex-wrap:wrap;row-gap:5px}
+.week .mtg .m-title,.tray .mtg .m-title{flex:1 1 100%;order:3;padding:0 0 0 1px}
+.week .mtg .m-time,.tray .mtg .m-time{flex:1}
+.week .mtg .m-time{background:transparent;padding:2px 0}
+.week .mtg .m-time::before{content:'';}
+@media (max-width:760px){
+  .week .mtg .m-top{flex-wrap:nowrap}
+  .week .mtg .m-title{flex:1 1 auto;order:0}
+}

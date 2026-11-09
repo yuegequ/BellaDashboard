@@ -70,6 +70,60 @@ function linkify(s) {
 }
 const findLinks = s => [...new Set((s || '').match(URL_RE) || [])];
 
+/* ---- time helpers (meetings) ---- */
+const hm = (h, m) => `${pad(h)}:${pad(m)}`;
+const h24 = (h, ap) => ap === 'pm' ? (h % 12) + 12 : ap === 'am' ? (h % 12) : h;
+function parseTime(title) {
+  const s = title || '';
+  for (const m of s.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?![\d:])/gi)) {
+    if (!(m[2] || m[3] || m[5] || m[6])) continue;          // "10-12" alone is not a time
+    let sh = +m[1], sm = +(m[2] || 0), eh = +m[4], em = +(m[5] || 0);
+    if (sh > 23 || eh > 23 || sm > 59 || em > 59) continue;
+    const sa = m[3] && m[3].toLowerCase(), ea = m[6] && m[6].toLowerCase();
+    if (sh > 12 || eh > 12) { /* already 24h */ }
+    else if (sa || ea) {
+      let S = sa ? h24(sh, sa) : null, E = ea ? h24(eh, ea) : null;
+      if (S === null) { S = h24(sh, ea); if (S * 60 + sm > E * 60 + em) S = h24(sh, ea === 'pm' ? 'am' : 'pm'); }
+      if (E === null) { E = h24(eh, sa); if (E * 60 + em <= S * 60 + sm) E += 12; }
+      sh = S; eh = E;
+    } else {
+      sh = ((sh >= 1 && sh <= 7) || sh === 12) ? (sh % 12) + 12 : sh;
+      eh = eh % 12; while (eh * 60 + em <= sh * 60 + sm) eh += 12;
+    }
+    if (eh > 23) eh = 23;
+    return { start: hm(sh, sm), end: hm(eh, em), match: m[0] };
+  }
+  const m1 = s.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (m1 && +m1[1] <= 12 && +(m1[2] || 0) < 60) return { start: hm(h24(+m1[1], m1[3].toLowerCase()), +(m1[2] || 0)), end: '', match: m1[0] };
+  const m2 = s.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (m2 && +m2[1] <= 23 && +m2[2] < 60) {
+    let h = +m2[1]; if (h <= 12 && ((h >= 1 && h <= 7) || h === 12)) h = (h % 12) + 12;
+    return { start: hm(h, +m2[2]), end: '', match: m2[0] };
+  }
+  return null;
+}
+const ampm = t => { const [h, m] = t.split(':').map(Number); return { n: `${h % 12 || 12}${m ? ':' + pad(m) : ''}`, ap: h >= 12 ? 'pm' : 'am' }; };
+const fmtTime = t => { if (!t) return ''; const x = ampm(t); return `${x.n} ${x.ap}`; };
+const fmtTimeShort = t => { if (!t) return ''; const x = ampm(t); return x.n + x.ap[0]; };
+function timeRange(t) {
+  if (!t.start) return 'time tbd';
+  const a = ampm(t.start); if (!t.end) return `${a.n} ${a.ap}`;
+  const b = ampm(t.end);
+  return a.ap === b.ap ? `${a.n} – ${b.n} ${b.ap}` : `${a.n} ${a.ap} – ${b.n} ${b.ap}`;
+}
+const fmtDur = ms => { const m = Math.max(1, Math.ceil(ms / 60000)); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`; };
+function normalizeTasks(list) {
+  for (const t of list) {
+    if (!t.kind) {
+      const p = parseTime(t.title);
+      if (p) { t.kind = 'meeting'; t.start = p.start; t.end = p.end; } else t.kind = 'task';
+    }
+    if (t.start === undefined) t.start = '';
+    if (t.end === undefined) t.end = '';
+    t.isDue = !!t.isDue;
+  }
+}
+
 /* ---------------- state ---------------- */
 function defaultLinks() {
   return [
@@ -87,9 +141,9 @@ function defaults() {
 function load() {
   try {
     const r = JSON.parse(localStorage.getItem(KEY));
-    if (r && Array.isArray(r.tasks)) return Object.assign(defaults(), r);
+    if (r && Array.isArray(r.tasks)) { const o = Object.assign(defaults(), r); normalizeTasks(o.tasks); return o; }
   } catch {}
-  const s = defaults(); s.tasks = seedTasks(); s.notes = seedNotes(); return s;
+  const s = defaults(); s.tasks = seedTasks(); s.notes = seedNotes(); normalizeTasks(s.tasks); return s;
 }
 let S = load();
 let saveTimer;
@@ -104,24 +158,36 @@ function save(silent) {
 function saveNow() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
 
 function seedTasks() {
-  const T = (title, cls, type, status, date, due, notes = '') => ({ id: uid(), title, link: '', cls, type, status, date, due, notes, created: Date.now() });
+  const T = (title, cls, type, status, date, due, x = {}) => ({ id: uid(), title, link: '', cls, type, status, date, due, notes: '', created: Date.now(), kind: 'task', start: '', end: '', isDue: false, ...x });
+  const RED = { isDue: true };
   return [
+    // earlier this month
     T('Module 5 Quiz','G H 101 A','Quiz','done','2026-11-01','2026-11-01'),
     T('Global Fund Assignment #5','G H 101 A','Homework','done','2026-11-01','2026-11-01'),
     T('PCT Bake Cookies','CLUBS','','done','2026-11-02',''),
-    T('Artifact Presentation Slides','INFO 280','Presentation','done','2026-11-03','2026-11-04'),
+    T('Artifact Presentation Slides','INFO 280','Presentation','done','2026-11-03','2026-11-04', RED),
     T('Reading Reflection 6','INFO 360','Homework','done','2026-11-04','2026-11-02'),
     T('Weekly Review 5: Transforming Data','INFO 201','Homework','done','2026-11-05',''),
-    T('Group Project 2: Research','INFO 360','Project','done','2026-11-06','2026-11-06'),
+    T('Group Project 2: Research','INFO 360','Project','done','2026-11-06','2026-11-06', RED),
     T('Module 6 Quiz','G H 101 A','Quiz','done','2026-11-07','2026-11-08'),
-    T('vibecode website for portfolio','MISC','','done','2026-11-07',''),
-    T('Costco Appl','work/intern','APPLICATION','not-started','2026-11-08','2026-11-03'),
-    T('due Introductions & Group Formation + Team Networking Comment','','Discussion','not-started','2026-11-08',''),
-    T('MIDTERM','G H 101 A','Midterm','not-started','2026-11-09',''),
-    T('7:30-9:30 PCT Pledge QUIZ','CLUBS','Quiz','not-started','2026-11-09',''),
+    T('vibecode website for portfolio','','','done','2026-11-07',''),
+    // from your Notion table
+    T('PCT Financial breakdown','CLUBS','','done','2026-11-08',''),
+    T('PCT Active 1-1 emailing (1)','CLUBS','','done','2026-11-08',''),
+    T('Big-Little Letters','CLUBS','','done','2026-11-08','', RED),
+    T('PCT gr 2 innovation slides','CLUBS','','done','2026-11-08','2026-11-09'),
+    T('Reading Reflection 7','INFO 360','','done','2026-11-08','2026-11-09'),
+    T('due Introductions & Group Formation + Team Networking Comment','INFO 280','','done','2026-11-08','2026-11-09'),
+    T('Costco Appl','work/intern','','not-started','2026-11-08','2026-11-03', RED),
+    T('MIDTERM','G H 101 A','Midterm','not-started','2026-11-09','', RED),
+    T('7:30-9:30 PCT Pledge QUIZ','CLUBS','','not-started','2026-11-09','', RED),
     T('PCT Active 1-1 emailing','CLUBS','','not-started','2026-11-11',''),
-    T('12:00-1:00pm PCT 1-1 w April','CLUBS','','not-started','2026-11-13',''),
-    T('STUDY FOR EXAM','INFO 201','Study','not-started','2026-11-14',''),
+    T('12:00-1:00pm PCT 1-1 w April','CLUBS','','not-started','2026-11-13','', { kind: 'meeting', start: '12:00', end: '13:00' }),
+    T('STUDY FOR EXAM','INFO 201','','not-started','2026-11-14','', RED),
+    T('Exam II','INFO 201','','not-started','2026-11-17','', RED),
+    T('Informatics Appointment - In Person','UW','','not-started','2026-11-18','', { kind: 'meeting' }),
+    T('4:20 pm INPERSON iSchool Advising','UW','','not-started','2026-11-20','', { kind: 'meeting', start: '16:20', end: '' }),
+    T('FINAL','G H 101 A','','not-started','2026-12-07','', RED),
   ];
 }
 function seedNotes() {
@@ -136,7 +202,7 @@ function seedNotes() {
 function rollover() {
   const t = todayStr(); let n = 0;
   for (const x of S.tasks) {
-    if (ROLL_STATUSES.includes(x.status) && x.date && x.date < t) {
+    if (ROLL_STATUSES.includes(x.status) && x.kind !== 'meeting' && x.date && x.date < t) {
       x.rolledFrom = x.rolledFrom || x.date;
       x.date = t; x.rolled = (x.rolled || 0) + 1; n++;
     }
@@ -154,6 +220,12 @@ let cursor = parse(todayStr());
 let navDir = 0;
 const viewEl = $('#view');
 
+const isMtg = t => t.kind === 'meeting';
+const closedSt = s => s === 'done' || s === 'cancelled';
+const ordKey = t => closedSt(t.status) ? 20 + ST_ORDER[t.status] : (t.isDue ? -1 : ST_ORDER[t.status]);
+const todoSort = (a, b) => ordKey(a) - ordKey(b) || a.created - b.created;
+const mtgSort = (a, b) => (a.start || '99:99').localeCompare(b.start || '99:99') || a.created - b.created;
+
 function visible() {
   return S.tasks.filter(t =>
     (!S.classFilter || t.cls === S.classFilter) &&
@@ -162,21 +234,36 @@ function visible() {
 function byDate(list = visible()) {
   const m = {};
   for (const t of list) (m[t.date || ''] ||= []).push(t);
-  for (const k in m) m[k].sort((a, b) => (ST_ORDER[a.status] - ST_ORDER[b.status]) || (a.created - b.created));
   return m;
 }
+// every day = meetings pinned on top (by time) + to-do list below (red/due first)
+function split(list = []) {
+  return { m: list.filter(isMtg).sort(mtgSort), d: list.filter(t => !isMtg(t)).sort(todoSort) };
+}
+function cleanTitle(t) {
+  const raw = t.title || 'Untitled';
+  if (!isMtg(t) || !t.start) return raw;
+  const p = parseTime(raw); if (!p) return raw;
+  const c = raw.replace(p.match, ' ').replace(/^[\s\-–—:,|·]+|[\s\-–—:,|·]+$/g, '').replace(/\s+/g, ' ').trim();
+  return c || raw;
+}
+const linkBtn = t => t.link ? ` <a class="c-link" href="${esc(t.link)}" target="_blank" rel="noopener" title="${esc(host(t.link))}">↗</a>` : '';
 
+/* ---- to-do card ---- */
 function card(t, mode, i = 0) {
   const full = mode !== 'mini';
+  const dueNow = t.isDue && !closedSt(t.status);
   const sub = [];
-  if (full) sub.push(esc(stLabel(t.status)));
   if (t.due) sub.push('due ' + fmtShort(t.due));
   if (t.rolled && t.status !== 'done') sub.push('↻ carried over');
-  return `<article class="card s-${t.status}" draggable="${!TOUCH}" data-id="${t.id}" style="--i:${i}">
+  const chips = (t.cls ? `<span class="tag ${tagColor(t.cls)}">${esc(t.cls)}</span>` : '') +
+    (t.type ? `<span class="type ${HOT_TYPES.includes(t.type) ? 'hot' : ''}">${esc(t.type)}</span>` : '') +
+    (full ? `<button class="st-pill" data-status-open="${t.id}" title="Change status">${esc(stLabel(t.status))}</button>` : '');
+  return `<article class="card s-${t.status}${dueNow ? ' due' : ''}" draggable="${!TOUCH}" data-id="${t.id}" style="--i:${i}">
     <button class="dot" data-toggle="${t.id}" aria-label="${esc(stLabel(t.status))}, tap to mark done" title="${esc(stLabel(t.status))}"></button>
     <div class="c-body">
-      <div class="c-title">${esc(t.title || 'Untitled')}${t.link ? ` <a class="c-link" href="${esc(t.link)}" target="_blank" rel="noopener" title="${esc(host(t.link))}">↗</a>` : ''}</div>
-      ${(t.cls || t.type) ? `<div class="c-meta">${t.cls ? `<span class="tag ${tagColor(t.cls)}">${esc(t.cls)}</span>` : ''}${t.type ? `<span class="type ${HOT_TYPES.includes(t.type) ? 'hot' : ''}">${esc(t.type)}</span>` : ''}</div>` : ''}
+      <div class="c-title">${dueNow ? '<span class="badge-due">DUE</span> ' : ''}${esc(t.title || 'Untitled')}${linkBtn(t)}</div>
+      ${chips ? `<div class="c-meta">${chips}</div>` : ''}
       ${sub.length ? `<div class="c-sub">${sub.map(s => `<span>${s}</span>`).join('')}</div>` : ''}
       ${mode === 'day' && t.notes ? `<div class="c-notes">${linkify(t.notes)}</div>` : ''}
     </div>
@@ -184,6 +271,55 @@ function card(t, mode, i = 0) {
   </article>`;
 }
 
+/* ---- meeting card with countdown bar ---- */
+function mtgCard(t, mode, i = 0) {
+  const mini = mode === 'mini';
+  const time = mini ? (fmtTimeShort(t.start) || '–') : timeRange(t);
+  return `<article class="mtg s-${t.status}${mini ? ' mini' : ''}" draggable="${!TOUCH}" data-id="${t.id}" data-mtg="${t.id}" style="--i:${i}">
+    <div class="m-top">
+      <button class="dot" data-toggle="${t.id}" aria-label="mark attended" title="${esc(stLabel(t.status))}"></button>
+      <span class="m-time">${esc(time)}</span>
+      <span class="m-title">${esc(cleanTitle(t))}${linkBtn(t)}</span>
+      <button class="mv" data-move-open="${t.id}" aria-label="Move to another date">move</button>
+    </div>
+    <div class="m-bar"><i></i></div>
+    <div class="m-sub"></div>
+    ${mode === 'day' && t.notes ? `<div class="c-notes">${linkify(t.notes)}</div>` : ''}
+  </article>`;
+}
+function mtgState(t, now = new Date()) {
+  const today = todayStr();
+  if (!t.date) return { pct: 0, label: '', cls: '' };
+  if (t.date > today) {
+    const n = Math.round((parse(t.date) - parse(today)) / 864e5);
+    return { pct: 0, label: n === 1 ? 'tomorrow' : `in ${n} days`, cls: '' };
+  }
+  if (t.date < today) return { pct: 100, label: 'past', cls: 'past' };
+  if (!t.start) return { pct: 0, label: 'time tbd', cls: '' };
+  const d = parse(t.date), at = hmStr => { const [h, m] = hmStr.split(':').map(Number); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m); };
+  const st = at(t.start);
+  let en = t.end ? at(t.end) : new Date(st.getTime() + 3600000);
+  if (en <= st) en = new Date(st.getTime() + 3600000);
+  if (now < st) {
+    let base = at('07:00'); if (base >= st) base = new Date(st.getTime() - 3600000);
+    return { pct: Math.max(0, Math.min(1, (now - base) / (st - base))) * 100, label: `in ${fmtDur(st - now)}`, cls: '' };
+  }
+  if (now < en) return { pct: (now - st) / (en - st) * 100, label: `happening now · ${fmtDur(en - now)} left`, cls: 'live' };
+  return { pct: 100, label: 'ended', cls: 'past' };
+}
+function updateMtgBars() {
+  const now = new Date();
+  $$('[data-mtg]').forEach(el => {
+    const t = S.tasks.find(x => x.id === el.dataset.mtg); if (!t) return;
+    const s = mtgState(t, now);
+    $('.m-bar i', el).style.width = s.pct + '%';
+    $('.m-sub', el).textContent = s.label;
+    el.classList.toggle('live', s.cls === 'live');
+    el.classList.toggle('past', s.cls === 'past');
+  });
+}
+
+/* ---- month ---- */
 function renderMonth() {
   const y = cursor.getFullYear(), m = cursor.getMonth();
   const first = new Date(y, m, 1), start = addDays(first, -first.getDay());
@@ -194,14 +330,15 @@ function renderMonth() {
   let h = `<div class="cal month"><div class="dow">${DOW.map(d => `<div>${d}</div>`).join('')}</div><div class="grid">`;
   for (let i = 0; i < cells; i++) {
     const d = addDays(start, i), k = ymd(d);
-    const list = map[k] || [];
+    const { m: ms, d: ds } = split(map[k]);
     h += `<div class="cell ${d.getMonth() !== m ? 'out' : ''} ${k === today ? 'today' : ''}" data-date="${k}">
       <div class="cell-head"><span class="num">${d.getDate() === 1 ? MON[d.getMonth()] + ' ' : ''}${d.getDate()}</span><button class="add" data-add="${k}" aria-label="Add task on ${fmtShort(k)}">+</button></div>
-      <div class="stack">${list.map((t, j) => card(t, 'mini', j)).join('')}</div></div>`;
+      <div class="stack">${ms.map((t, j) => mtgCard(t, 'mini', j)).join('')}${ms.length && ds.length ? '<div class="sep"></div>' : ''}${ds.map((t, j) => card(t, 'mini', j + ms.length)).join('')}</div></div>`;
   }
   viewEl.innerHTML = h + '</div></div>';
 }
 
+/* ---- week ---- */
 function renderWeek() {
   const start = addDays(cursor, -cursor.getDay()), end = addDays(start, 6);
   const map = byDate(), today = todayStr();
@@ -210,43 +347,44 @@ function renderWeek() {
     : `${MON[start.getMonth()]} ${start.getDate()} – <em>${MON[end.getMonth()]} ${end.getDate()}</em>`;
   let h = '<div class="week">';
   for (let i = 0; i < 7; i++) {
-    const d = addDays(start, i), k = ymd(d), list = map[k] || [];
-    const done = list.filter(t => t.status === 'done').length;
+    const d = addDays(start, i), k = ymd(d);
+    const { m: ms, d: ds } = split(map[k]);
+    const done = ds.filter(t => t.status === 'done').length;
     h += `<div class="wcol ${k === today ? 'today' : ''}" data-date="${k}">
-      <div class="whead"><div><div class="d">${DOW[i]}</div><div class="n">${d.getDate()}</div></div><span class="wp">${list.length ? `${done}/${list.length}` : ''}</span></div>
-      <div class="stack">${list.map((t, j) => card(t, 'week', j)).join('')}</div>
-      <button class="wadd" data-add="${k}">+ add</button></div>`;
+      <div class="whead"><div><div class="d">${DOW[i]}</div><div class="n">${d.getDate()}</div></div><span class="wp">${ds.length ? `${done}/${ds.length}` : ''}</span></div>
+      <div class="sec-label first">Meetings</div>
+      <div class="stack">${ms.length ? ms.map((t, j) => mtgCard(t, 'week', j)).join('') : '<div class="sec-empty">none</div>'}</div>
+      <div class="sec-label">To do</div>
+      <div class="stack">${ds.map((t, j) => card(t, 'week', j + ms.length)).join('')}</div>
+      <div class="wadds"><button class="wadd" data-add="${k}">+ to do</button><button class="wadd" data-add-meeting="${k}">+ meeting</button></div></div>`;
   }
   viewEl.innerHTML = h + '</div>';
 }
 
+/* ---- day ---- */
 function renderDay() {
-  const k = ymd(cursor), list = visible().filter(t => t.date === k).sort((a, b) => ST_ORDER[a.status] - ST_ORDER[b.status]);
+  const k = ymd(cursor), list = visible().filter(t => t.date === k);
+  const { m: ms, d: ds } = split(list);
   const isToday = k === todayStr();
   $('#rangeLabel').innerHTML = `${isToday ? 'Today' : DAYS[cursor.getDay()]}, <em>${MON[cursor.getMonth()]} ${cursor.getDate()}</em>`;
-  const groups = [
-    ['In progress', list.filter(t => ROLL_STATUSES.includes(t.status))],
-    ['Up next', list.filter(t => ['not-started', 'todo-finish'].includes(t.status))],
-    ['Done', list.filter(t => ['done', 'cancelled'].includes(t.status))],
-  ];
-  let h = `<div class="day" data-date="${k}">`, i = 0;
-  if (!list.length) h += `<div class="empty-day"><svg><use href="#i-berry"/></svg>Nothing here yet. Paste an assignment or tap + New.</div>`;
-  for (const [name, arr] of groups) {
-    if (!arr.length) continue;
-    h += `<div class="day-group"><h3>${name} · ${arr.length}</h3><div class="stack">${arr.map(t => card(t, 'day', i++)).join('')}</div></div>`;
-  }
-  h += `<button class="wadd" data-add="${k}" style="width:100%;margin-top:6px">+ add to ${isToday ? 'today' : fmtDay(k)}</button></div>`;
-  viewEl.innerHTML = h;
+  const open = ds.filter(t => !closedSt(t.status)).length;
+  viewEl.innerHTML = `<div class="day" data-date="${k}">
+    <div class="sec-label first">Meetings · ${ms.length}</div>
+    <div class="stack">${ms.length ? ms.map((t, j) => mtgCard(t, 'day', j)).join('') : '<div class="sec-empty">no meetings</div>'}</div>
+    <div class="sec-label">To do · ${open} left</div>
+    <div class="stack">${ds.length ? ds.map((t, j) => card(t, 'day', j + ms.length)).join('') : `<div class="empty-day"><svg><use href="#i-berry"/></svg>Nothing on the list. Paste an assignment or add one.</div>`}</div>
+    <div class="wadds" style="margin-top:14px"><button class="wadd" data-add="${k}">+ to do</button><button class="wadd" data-add-meeting="${k}">+ meeting</button></div></div>`;
 }
 
+/* ---- list ---- */
 function renderList() {
   $('#rangeLabel').innerHTML = `All <em>tasks</em>`;
-  const list = visible().sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999') || ST_ORDER[a.status] - ST_ORDER[b.status]);
+  const list = visible().sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999') || (isMtg(b) - isMtg(a)) || todoSort(a, b));
   if (!list.length) { viewEl.innerHTML = '<div class="empty">No tasks yet.</div>'; return; }
   viewEl.innerHTML = `<div class="tablewrap"><table class="table"><thead><tr><th>Status</th><th>Name</th><th>Class</th><th>Type</th><th>Date</th><th>Due by</th><th></th></tr></thead><tbody>
     ${list.map((t, i) => `<tr class="row s-${t.status}" data-id="${t.id}" style="--i:${Math.min(i, 30)}">
       <td><span class="st s-${t.status}"><button class="dot" data-toggle="${t.id}" aria-label="toggle done"></button>${esc(stLabel(t.status))}</span></td>
-      <td class="t-name">${esc(t.title || 'Untitled')}${t.link ? ` <a class="c-link" href="${esc(t.link)}" target="_blank" rel="noopener">↗</a>` : ''}</td>
+      <td class="t-name">${t.isDue && !closedSt(t.status) ? '<span class="badge-due">DUE</span> ' : ''}${isMtg(t) ? `<span class="mono">${esc(t.start ? fmtTime(t.start) : 'meeting')}</span> ` : ''}${esc(cleanTitle(t))}${linkBtn(t)}</td>
       <td>${t.cls ? `<span class="tag ${tagColor(t.cls)}">${esc(t.cls)}</span>` : ''}</td>
       <td>${t.type ? `<span class="type ${HOT_TYPES.includes(t.type) ? 'hot' : ''}">${esc(t.type)}</span>` : ''}</td>
       <td class="mono">${t.date ? fmtShort(t.date) : '—'}</td>
@@ -258,14 +396,45 @@ function renderList() {
 function renderTray() {
   const none = S.view === 'list' ? [] : visible().filter(t => !t.date);
   $('#tray').innerHTML = none.length
-    ? `<div class="tray"><div class="kicker" style="margin-bottom:10px">No date · ${none.length}</div><div class="stack">${none.map((t, i) => card(t, 'week', i)).join('')}</div></div>` : '';
+    ? `<div class="tray"><div class="kicker" style="margin-bottom:10px">No date · ${none.length}</div><div class="stack">${none.map((t, i) => isMtg(t) ? mtgCard(t, 'week', i) : card(t, 'week', i)).join('')}</div></div>` : '';
 }
+
+/* ---- status popover (change status / red flag without opening the task) ---- */
+const statusPop = document.createElement('div');
+statusPop.className = 'move-pop'; statusPop.id = 'statusPop'; statusPop.hidden = true;
+document.body.appendChild(statusPop);
+let statusId = null;
+function openStatus(id, anchor) {
+  closeMove();
+  const t = S.tasks.find(x => x.id === id); if (!t) return;
+  statusId = id;
+  statusPop.innerHTML = `<div class="mp-title">Status</div>` +
+    STATUSES.map(s => `<button data-status="${s.k}" class="${t.status === s.k ? 'cur' : ''}">${esc(s.label)}</button>`).join('') +
+    (isMtg(t) ? '' : `<div class="mp-sep"></div><button data-flag="1" class="flag">${t.isDue ? '✓ ' : ''}Red: due this day</button>`);
+  statusPop.hidden = false;
+  const r = anchor.getBoundingClientRect(), w = statusPop.offsetWidth, h = statusPop.offsetHeight;
+  let x = Math.max(8, Math.min(r.left, innerWidth - w - 8));
+  let y = r.bottom + 6; if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 6);
+  statusPop.style.left = x + 'px'; statusPop.style.top = y + 'px';
+}
+function closeStatus() { statusPop.hidden = true; statusId = null; }
+statusPop.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !statusId) return;
+  const t = S.tasks.find(x => x.id === statusId); if (!t) return closeStatus();
+  const r = b.getBoundingClientRect();
+  if (b.dataset.status) { const was = t.status; t.status = b.dataset.status; if (t.status === 'done' && was !== 'done') burst(r.left + 20, r.top, 10); }
+  else if (b.dataset.flag) t.isDue = !t.isDue;
+  closeStatus(); save(); renderCalendar(); renderHero();
+});
+document.addEventListener('pointerdown', e => { if (!statusPop.hidden && !statusPop.contains(e.target) && !e.target.closest('[data-status-open]')) closeStatus(); });
 
 function renderCalendar() {
   viewEl.className = 'view' + (navDir > 0 ? ' slide-l' : navDir < 0 ? ' slide-r' : '');
   void viewEl.offsetWidth;
   ({ month: renderMonth, week: renderWeek, day: renderDay, list: renderList }[S.view] || renderMonth)();
   renderTray();
+  void viewEl.offsetWidth;
+  updateMtgBars();
   navDir = 0;
   $$('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.view === S.view));
   moveSegPill();
@@ -295,7 +464,7 @@ function renderHero() {
   $('#greetWord').textContent = hr < 5 ? 'Up late,' : hr < 12 ? 'Good morning,' : hr < 17 ? 'Good afternoon,' : 'Good evening,';
   $('#todayKicker').textContent = `00 / Today · ${DAYS[now.getDay()]}, ${MONTHS[now.getMonth()]} ${now.getDate()}`;
   const t = todayStr();
-  const list = S.tasks.filter(x => x.date === t && x.status !== 'cancelled');
+  const list = S.tasks.filter(x => x.date === t && x.status !== 'cancelled' && x.kind !== 'meeting');
   const done = list.filter(x => x.status === 'done').length;
   const pct = list.length ? done / list.length : 0;
   $('.p-fill').style.width = (pct * 100) + '%';
@@ -340,6 +509,10 @@ function onCalClick(e) {
   if (tog) { e.stopPropagation(); toggleDone(tog.dataset.toggle, tog); return; }
   const mv = e.target.closest('[data-move-open]');
   if (mv) { e.stopPropagation(); openMove(mv.dataset.moveOpen, mv); return; }
+  const stb = e.target.closest('[data-status-open]');
+  if (stb) { e.stopPropagation(); openStatus(stb.dataset.statusOpen, stb); return; }
+  const am = e.target.closest('[data-add-meeting]');
+  if (am) { openTask(null, { date: am.dataset.addMeeting, kind: 'meeting' }); return; }
   const add = e.target.closest('[data-add]');
   if (add) { openTask(null, { date: add.dataset.add }); return; }
   const c = e.target.closest('[data-id]');
@@ -351,7 +524,7 @@ $('#tray').addEventListener('click', onCalClick);
 // drag & drop (desktop)
 let dragId = null;
 document.addEventListener('dragstart', e => {
-  const c = e.target.closest?.('.card'); if (!c) return;
+  const c = e.target.closest?.('.card, .mtg'); if (!c) return;
   dragId = c.dataset.id; c.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId);
 });
@@ -416,24 +589,40 @@ function animateOut(id, cb) {
 
 /* ---------------- task dialog ---------------- */
 const dlg = $('#taskDlg'); let editing = null;
-const F = { title: $('#fTitle'), link: $('#fLink'), status: $('#fStatus'), cls: $('#fClass'), type: $('#fType'), date: $('#fDate'), due: $('#fDue'), notes: $('#fNotes') };
+const F = { title: $('#fTitle'), link: $('#fLink'), status: $('#fStatus'), cls: $('#fClass'), type: $('#fType'), date: $('#fDate'), due: $('#fDue'), notes: $('#fNotes'), start: $('#fStart'), end: $('#fEnd'), isDue: $('#fIsDue') };
+let curKind = 'task';
+function setKind(k) {
+  curKind = k;
+  $$('#fKind button').forEach(b => b.classList.toggle('on', b.dataset.kind === k));
+  $('#rowTime').hidden = k !== 'meeting'; $('#rowDue').hidden = k === 'meeting';
+}
+$('#fKind').addEventListener('click', e => { const b = e.target.closest('[data-kind]'); if (b) setKind(b.dataset.kind); });
+function detectKind() {
+  if (editing || curKind !== 'task' || F.start.value) return;
+  const p = parseTime(F.title.value); if (!p) return;
+  setKind('meeting'); F.start.value = p.start; F.end.value = p.end || '';
+  toast('looks like a meeting, switched it');
+}
+F.title.addEventListener('change', detectKind);
 F.status.innerHTML = ['To-do', 'In progress', 'Complete'].map(g =>
   `<optgroup label="${g}">${STATUSES.filter(s => s.g === g).map(s => `<option value="${s.k}">${esc(s.label)}</option>`).join('')}</optgroup>`).join('');
 
 function openTask(id, preset = {}) {
   closeMove();
   editing = id;
-  const t = id ? S.tasks.find(x => x.id === id) : { title: '', link: '', status: 'not-started', cls: '', type: '', date: '', due: '', notes: '', ...preset };
+  const t = id ? S.tasks.find(x => x.id === id) : { title: '', link: '', status: 'not-started', cls: '', type: '', date: '', due: '', notes: '', kind: 'task', start: '', end: '', isDue: false, ...preset };
   if (!t) return;
-  $('#dlgKicker').textContent = id ? 'EDIT TASK' : 'NEW TASK';
+  $('#dlgKicker').textContent = id ? 'EDIT ITEM' : 'NEW ITEM';
   F.title.value = t.title || ''; F.link.value = t.link || ''; F.status.value = t.status || 'not-started';
   F.cls.value = t.cls || ''; F.type.value = t.type || ''; F.date.value = t.date || ''; F.due.value = t.due || ''; F.notes.value = t.notes || '';
+  setKind(t.kind || 'task'); F.start.value = t.start || ''; F.end.value = t.end || ''; F.isDue.checked = !!t.isDue;
   $('#fDelete').hidden = !id;
   const rolled = $('#fRolled');
   rolled.hidden = !(t.rolled && t.rolledFrom);
   if (t.rolled && t.rolledFrom) rolled.textContent = `↻ carried over from ${fmtDay(t.rolledFrom)} (in progress)`;
   updateLinkUI(); updateFound();
   dlg.showModal();
+  if (!id && preset.title && !preset.kind) detectKind();
   if (!id && !TOUCH) setTimeout(() => F.title.focus(), 50);
 }
 function updateLinkUI() {
@@ -460,7 +649,9 @@ $('#taskForm').addEventListener('submit', e => {
   e.preventDefault();
   const title = F.title.value.trim();
   if (!title) { F.title.focus(); F.title.animate?.([{ transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }], { duration: 300 }); return; }
-  const data = { title, link: safeUrl(F.link.value), status: F.status.value, cls: F.cls.value.trim(), type: F.type.value.trim(), date: F.date.value, due: F.due.value, notes: F.notes.value };
+  const data = { title, link: safeUrl(F.link.value), status: F.status.value, cls: F.cls.value.trim(), type: F.type.value.trim(), date: F.date.value, due: F.due.value, notes: F.notes.value,
+    kind: curKind, start: curKind === 'meeting' ? F.start.value : '', end: curKind === 'meeting' ? F.end.value : '', isDue: curKind === 'task' && F.isDue.checked };
+  if (data.kind === 'meeting' && !data.start) { const pt = parseTime(title); if (pt) { data.start = pt.start; data.end = pt.end; } }
   if (data.cls && !S.classes.includes(data.cls)) S.classes.push(data.cls);
   if (data.type && !S.types.includes(data.type)) S.types.push(data.type);
   if (editing) {
@@ -494,7 +685,7 @@ function parsePaste(cd) {
 F.title.addEventListener('paste', e => {
   const p = parsePaste(e.clipboardData);
   e.preventDefault();
-  const el = F.title; el.setRangeText(p.title, el.selectionStart, el.selectionEnd, 'end');
+  const el = F.title; el.setRangeText(p.title, el.selectionStart, el.selectionEnd, 'end'); detectKind();
   if (p.link) {
     F.link.value = p.link; updateLinkUI();
     const row = $('#linkRow'); row.classList.remove('got'); void row.offsetWidth; row.classList.add('got');
@@ -722,7 +913,7 @@ async function pull(quiet) {
     const remote = JSON.parse(txt || '{}');
     if ((remote.updatedAt || 0) > (S.updatedAt || 0)) {
       Object.assign(S, { links: remote.links || S.links, tasks: remote.tasks || [], notes: remote.notes || [], classes: remote.classes || S.classes, types: remote.types || S.types, updatedAt: remote.updatedAt });
-      saveNow(); rollover(); renderAll();
+      normalizeTasks(S.tasks); saveNow(); rollover(); renderAll();
       if (!quiet) toast('pulled latest from your other device');
     } else if ((S.updatedAt || 0) > (remote.updatedAt || 0)) { pushing = false; await push(); return; }
     syncState('on', 'Connected. Last synced ' + new Date().toLocaleTimeString());
@@ -746,7 +937,7 @@ $('#syncForm').addEventListener('submit', async e => {
     // first connect on a device: if the cloud already has a list, use it
     if (remote && remote.tasks && (remote.updatedAt || 0) >= (S.updatedAt || 0) - 1) {
       Object.assign(S, { links: remote.links || S.links, tasks: remote.tasks, notes: remote.notes || [], classes: remote.classes || S.classes, types: remote.types || S.types, updatedAt: remote.updatedAt });
-      saveNow(); rollover(); renderAll();
+      normalizeTasks(S.tasks); saveNow(); rollover(); renderAll();
       syncState('on', 'Connected. Loaded your list from the cloud.');
     } else { await push(); }
     toast('sync on ✿');
@@ -769,7 +960,7 @@ $('#importFile').onchange = async e => {
     const d = JSON.parse(await f.text());
     if (!Array.isArray(d.tasks)) throw 0;
     if (!confirm('Replace your current list with this backup?')) return;
-    S = Object.assign(defaults(), d); save(); renderAll(); toast('imported');
+    S = Object.assign(defaults(), d); normalizeTasks(S.tasks); save(); renderAll(); toast('imported');
   } catch { alert('That file is not a Berry List backup.'); }
   e.target.value = '';
 };
@@ -830,6 +1021,7 @@ addEventListener('scroll', () => {
   if (y < lastY - 2) topbar.classList.remove('hide');
   lastY = y;
   if (!movePop.hidden) closeMove();
+  if (!statusPop.hidden) closeStatus();
 }, { passive: true });
 
 const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }), { threshold: .15 });
@@ -903,6 +1095,8 @@ document.fonts?.ready.then(moveSegPill);
 if (!rollover()) saveNow();
 renderAll();
 runLoader();
+setInterval(updateMtgBars, 20000);
+document.addEventListener('visibilitychange', updateMtgBars);
 if (!window.Lenis) document.documentElement.style.scrollBehavior = 'smooth';
 window.__berry = { burst };
 })();

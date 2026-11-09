@@ -176,6 +176,9 @@
         <a id="fLinkOpen" class="btn sm" target="_blank" rel="noopener" hidden>open</a>
       </div>
       <div class="f-grid">
+        <div class="frow"><span class="fl">Kind</span>
+          <div class="kind-seg" id="fKind"><button type="button" data-kind="task">To do</button><button type="button" data-kind="meeting">Meeting</button></div>
+        </div>
         <label><span>Status</span><select id="fStatus" class="f-input"></select></label>
         <label><span>Class</span><input id="fClass" class="f-input" list="classList" autocomplete="off" placeholder="pick or type new"></label>
         <label><span>Type</span><input id="fType" class="f-input" list="typeList" autocomplete="off" placeholder="pick or type new"></label>
@@ -184,7 +187,13 @@
             <div class="chips"><button type="button" data-shift="0">today</button><button type="button" data-shift="1">+1 day</button><button type="button" data-shift="7">+1 week</button></div>
           </div>
         </label>
+        <div class="frow" id="rowTime" hidden><span class="fl">Time</span>
+          <div class="time-wrap"><input id="fStart" type="time" class="f-input" aria-label="start time"><span>to</span><input id="fEnd" type="time" class="f-input" aria-label="end time"></div>
+        </div>
         <label><span>Due by</span><input id="fDue" type="date" class="f-input"></label>
+        <div class="frow" id="rowDue"><span class="fl">Red flag</span>
+          <label class="toggle"><input type="checkbox" id="fIsDue"><span>due this day</span></label>
+        </div>
       </div>
       <label class="f-notes"><span>Notes</span><textarea id="fNotes" class="f-input" rows="3" placeholder="links, reminders, anything"></textarea></label>
       <div class="found" id="fFound"></div>
